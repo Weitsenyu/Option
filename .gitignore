@@ -22,4 +22,4 @@ venv/
 # －－－ Excel / 測試檔 －－－
 /test/*.xlsx
 /backend/*.xlsx
-/時間價值.xlsx
+!backend/時間價值.xlsx
