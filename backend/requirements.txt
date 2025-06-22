@@ -1,4 +1,4 @@
-# backend/requirements.txt  （完整內容）
+
 pandas
 requests
 openpyxl
