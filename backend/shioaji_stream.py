@@ -32,35 +32,53 @@ if not (API_KEY and API_SECRET):
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # ────────────────── ① 讀「過去四週平均」曲線 ──────────────────
-_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub     # 保留 0-9、+、-、.
-def _to_num(s, want_int=False):
-    """
-    將字串轉為數字；任何抓不到數字的內容（例：'三 15:02'）就 raise ValueError
-    """
+_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub          # 保留 0-9, +, -, .
+def _to_num(s):
     cleaned = _ONLY_NUM("", str(s))
-    if cleaned == "":                          # 代表沒有任何數字
+    if cleaned == "":
         raise ValueError
-    return int(float(cleaned)) if want_int else float(cleaned)
+    return float(cleaned)
 
 def _read_excel(buf: bytes):
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
+    """
+    回傳：
+        {"name": "過去四週平均", "data": [[剩餘分鐘, 時間價值], ...]}
+    Excel 結構：
+        col-0  = 星期＋時間（文字）
+        col-1  = 202506W1 … （本週即時）
+        col-2  = 右側最新四周平均　← 我們要的
+    """
     try:
-        # 優先用容器裡的檔案；沒有就遠端抓
         buf = (
             open(TIMEVAL_LOC, "rb").read()
             if os.path.isfile(TIMEVAL_LOC)
             else requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content
         )
-        df  = _read_excel(buf)
+        df = _read_excel(buf)
 
-        pts = []
-        for x, y in df.iloc[:, :2].dropna().values.tolist():
+        # 找到「右側最新四週平均」那欄；找不到就退而用第 2 欄
+        val_col = next(
+            (c for c in df.columns if "四週平均" in str(c)),
+            df.columns[1]  # 保底
+        )
+
+        # 只取這一欄、過濾空值並轉成 float
+        values = []
+        for v in df[val_col].dropna():
             try:
-                pts.append([_to_num(x, want_int=True), _to_num(y)])
+                values.append(_to_num(v))
             except ValueError:
-                continue                         # 任何一邊不是單純數字就丟掉
+                continue
+
+        if not values:
+            raise RuntimeError("找不到任何數值")
+
+        # 依「列序號」回推剩餘交易分鐘：每列 2 分鐘
+        n_rows = len(values)
+        pts = [[(n_rows - i - 1) * 2, values[i]] for i in range(n_rows)]
 
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
@@ -68,7 +86,7 @@ def load_avg_series() -> dict:
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-
+    
 avg_series = load_avg_series()             
 
 # === 2. HTML 解析小工具 ===================================
