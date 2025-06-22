@@ -45,6 +45,7 @@ def _read_excel(buf: bytes) -> pd.DataFrame:
 
 def load_avg_series() -> dict:
     try:
+        # 讀 excel（本機 or GitHub RAW）
         buf = (
             open(TIMEVAL_LOC, "rb").read()
             if os.path.isfile(TIMEVAL_LOC)
@@ -52,6 +53,7 @@ def load_avg_series() -> dict:
         )
         df = _read_excel(buf)
 
+        # 找到「四週平均」那一欄
         val_col = next((c for c in df.columns if "四週平均" in str(c)), df.columns[1])
         vals = []
         for v in df[val_col].dropna():
@@ -62,15 +64,30 @@ def load_avg_series() -> dict:
         if not vals:
             raise RuntimeError("no numeric value")
 
-        total_minutes = (len(vals) - 1) * 2
-        pts = [[total_minutes - i * 2, vals[i]] for i in range(len(vals))]
-        print(f"✅ 讀到時間價值 {len(pts)} 點")
+        STEP_MIN = 2                     # 每列資料 = 2 分鐘
+        total_min_left = 0               # 往後累加「剩餘分鐘」
+        mins_left = []                   # 暫存各筆對應的剩餘分鐘
+        prev = vals[0]
+
+        for v in vals:
+            if v > prev:                       # 非嚴謹，但足夠判斷日切點
+                total_min_left += STEP_MIN
+            mins_left.append(total_min_left)
+            total_min_left += STEP_MIN
+            prev = v
+
+        pts = [
+            [mins_left[-1] - m, v]             # mins_left 最大值為 0
+            for m, v in zip(mins_left, vals)
+        ]
+
+        print(f"✅ 讀到時間價值 {len(pts)} 點（曲線已平滑）")
         return {"name": "過去四週平均", "data": pts}
 
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-    
+
 avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
