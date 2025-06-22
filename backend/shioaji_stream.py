@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os, re, time, bisect, threading, warnings, sys, io
 from io import BytesIO
 from datetime import datetime, date, timedelta
@@ -11,11 +10,10 @@ import shioaji as sj
 from shioaji.constant import QuoteType, QuoteVersion
 from shioaji import Exchange, TickFOPv1, BidAskFOPv1
 
-
-BASE_DIR     = os.path.dirname(__file__)
-
-TIMEVAL_LOC  = os.path.join(BASE_DIR, "時間價值.xlsx")
-TIMEVAL_RAW  = (
+# ───────────────────────────── 基本參數 ─────────────────────────────
+BASE_DIR    = os.path.dirname(__file__)
+TIMEVAL_LOC = os.path.join(BASE_DIR, "時間價值.xlsx")
+TIMEVAL_RAW = (
     "https://raw.githubusercontent.com/Weitsenyu/Option/"
     "main/backend/%E6%99%82%E9%96%93%E5%83%B9%E5%80%BC.xlsx"
 )
@@ -33,44 +31,36 @@ if not (API_KEY and API_SECRET):
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-# ------------------------------------------------------------------
-# ① 讀取「過去四週平均」曲線
-# ------------------------------------------------------------------
-_NUM = re.compile(r"[^0-9+\-.]").sub           # 只保留 0-9.+-
-def _to_num(s: str, want_int=False):
+# ────────────────── ① 讀「過去四週平均」曲線 ──────────────────
+_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub     # 保留 0-9、+、-、.
+def _to_num(s, want_int=False):
     """
-    把字串裡的數字抓出來；抓不到就丟 ValueError。
-    例：'三 15:02' → ValueError（因為含非數字、冒號）
-        '1,234'   → 1234
+    將字串轉為數字；任何抓不到數字的內容（例：'三 15:02'）就 raise ValueError
     """
-    s = str(s).strip()
-    if not re.fullmatch(r"[0-9.+\-]+", s):  
+    cleaned = _ONLY_NUM("", str(s))
+    if cleaned == "":                          # 代表沒有任何數字
         raise ValueError
-    s = _NUM("", s)
-    return int(float(s)) if want_int else float(s)
+    return int(float(cleaned)) if want_int else float(cleaned)
 
 def _read_excel(buf: bytes):
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
-
     try:
-        if os.path.isfile(TIMEVAL_LOC):
-            buf = open(TIMEVAL_LOC, "rb").read()
-        else:
-            buf = requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content
-
+        # 優先用容器裡的檔案；沒有就遠端抓
+        buf = (
+            open(TIMEVAL_LOC, "rb").read()
+            if os.path.isfile(TIMEVAL_LOC)
+            else requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content
+        )
         df  = _read_excel(buf)
-        pts = []
 
+        pts = []
         for x, y in df.iloc[:, :2].dropna().values.tolist():
             try:
-                mins = _to_num(x, want_int=True)   # 剩餘「交易分鐘」
-                val  = _to_num(y)                  # 平均值
-                pts.append([mins, val])
+                pts.append([_to_num(x, want_int=True), _to_num(y)])
             except ValueError:
-                # 任何一邊轉不了數字就跳過該列
-                continue
+                continue                         # 任何一邊不是單純數字就丟掉
 
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
@@ -79,7 +69,7 @@ def load_avg_series() -> dict:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
 
-avg_series = load_avg_series()                
+avg_series = load_avg_series()             
 
 # === 2. HTML 解析小工具 ===================================
 def _best_encoding(res):
@@ -87,9 +77,6 @@ def _best_encoding(res):
     return "utf-8" if "utf-8" in ct else "big5"
 
 def fetch_table(url: str, is_night: bool):
-    """
-    向臺交所下載日盤或夜盤 HTML，回傳含「履約價」欄位的 DataFrame。
-    """
     r = requests.get(url, headers=HEADERS, timeout=30)
     r.encoding = _best_encoding(r)
     text = r.text.replace("&nbsp;", " ")
@@ -103,22 +90,19 @@ def fetch_table(url: str, is_night: bool):
         raise RuntimeError("無法從網頁擷取到交易日")
     date_str = m.group(1)
 
-    # 讀所有表，挑出有「履約價」的那一張
     dfs = pd.read_html(io.StringIO(text), header=0, flavor="lxml")
     df  = next(tbl for tbl in dfs if "履約價" in tbl.columns)
 
-    # 清理
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
     if df.iloc[-1, 0] in ("合計", "總計"):
         df = df.iloc[:-1]
     df.replace({"-": pd.NA, "－": pd.NA}, inplace=True)
 
-    # 補上日/夜盤與交易日欄
     df["市場時段"] = "夜盤" if is_night else "日盤"
     df["交易日"]   = pd.to_datetime(date_str, format="%Y/%m/%d")
     return df, date_str
 
-# === 3. 資料結構轉換小工具 ================================
+# === 3. 轉換工具 ==========================================
 CLEAN_COL = re.compile(r"[\s＊*()（）]").sub
 norm      = lambda s: CLEAN_COL("", str(s))
 NUM       = re.compile(r"[^0-9+\-.]").sub
@@ -138,8 +122,7 @@ def pick(df, *keys, raise_err=True):
     return None
 
 def expiry_to_date(exp: str):
-    y, m = int(exp[:4]), int(exp[4:6])
-    n    = int(exp[-1]) if "W" in exp else 3
+    y, m = int(exp[:4]), int(exp[4:6]); n = int(exp[-1]) if "W" in exp else 3
     cnt, d = 0, 1
     while True:
         if date(y, m, d).weekday() == 2:
@@ -149,17 +132,12 @@ def expiry_to_date(exp: str):
         d += 1
 
 def parse_chain(df, is_day: bool):
-    mcol = pick(df, "到期月份")
-    kcol = pick(df, "履約價")
-    ccol = pick(df, "買賣權")
+    mcol = pick(df, "到期月份"); kcol = pick(df, "履約價"); ccol = pick(df, "買賣權")
     vol_c = pick(df, "合計成交量", False) if is_day else pick(df, "成交量", False)
     net_c = pick(df, "MktPos", False) or pick(df, "NetMktPos", False) or pick(df, "rev.NetMktPos", False)
     vol_c = vol_c or pick(df, "成交量")
-    bid_c = pick(df, "最後最佳買價")
-    ask_c = pick(df, "最後最佳賣價")
-    last_c= pick(df, "最後", "成交價")
-    chg_c = pick(df, "漲跌%")
-    oi_c  = pick(df, "未沖銷")
+    bid_c, ask_c = pick(df, "最後最佳買價"), pick(df, "最後最佳賣價")
+    last_c, chg_c, oi_c = pick(df, "最後", "成交價"), pick(df, "漲跌%"), pick(df, "未沖銷")
 
     rows = []
     for _, r in df.iterrows():
@@ -167,7 +145,7 @@ def parse_chain(df, is_day: bool):
             continue
         try:
             exp_real = expiry_to_date(str(r[mcol]).strip())
-        except:
+        except Exception:
             exp_real = str(r[mcol]).strip()
         rows.append({
             "expiration": exp_real,
@@ -190,19 +168,18 @@ def merge(day, nite):
         d.setdefault(key(r), {}).update({k:v for k,v in r.items() if v not in (None,0)})
     return list(d.values())
 
-# === 4. 立即抓取第一次快照 ================================
-df_day, _   = fetch_table(URL_DAY,   False)
-df_nig, _   = fetch_table(URL_NIGHT, True)
-day_rows    = parse_chain(df_day, True)
-nite_rows   = parse_chain(df_nig, False)
-chain_rows  = merge(day_rows, nite_rows)
+# === 4. 抓第一次快照 ======================================
+df_day, _ = fetch_table(URL_DAY, False)
+df_nig, _ = fetch_table(URL_NIGHT, True)
+day_rows  = parse_chain(df_day, True)
+nite_rows = parse_chain(df_nig, False)
+chain_rows= merge(day_rows, nite_rows)
 
-# === 5. Socket.IO 連線 & 首波推送 ==========================
+# === 5. Socket.IO =========================================
 sio = socketio.Client(logger=False)
 sio.connect(SOCKET_HUB)
-
 sio.emit("dailySnap", {"chainRows": chain_rows}, namespace="/")
-sio.emit("otmSeries", {"average": avg_series}, namespace="/")   # ✅ 新增推送
+sio.emit("otmSeries", {"average": avg_series}, namespace="/")
 print(f"📤 dailySnap (日:{len(day_rows)} 夜:{len(nite_rows)})")
 
 def safe_emit(evt, data):
@@ -223,10 +200,9 @@ tse = api.Contracts.Indexs.TSE["001"]
 def emit_kbars():
     end   = datetime.now().date()
     start = end - timedelta(days=30)
-    kbars = api.kbars(contract=fut,
-                      start=start.strftime("%Y-%m-%d"),
-                      end  =end.strftime("%Y-%m-%d"))
-    df = pd.DataFrame({**kbars})
+    df = pd.DataFrame({**api.kbars(contract=fut,
+                                   start=start.strftime("%Y-%m-%d"),
+                                   end=end.strftime("%Y-%m-%d"))})
     df.ts = pd.to_datetime(df.ts)
     daily = (
         df.set_index("ts")
@@ -234,8 +210,9 @@ def emit_kbars():
           .agg({"Open":"first","High":"max","Low":"min","Close":"last","Volume":"sum"})
           .dropna().tail(30)
           .reset_index()
+          .drop_duplicates(subset="ts")
+          .sort_values("ts")
     )
-    daily = daily.drop_duplicates(subset="ts").sort_values("ts")
     daily["ts"] = (daily["ts"].view("int64") // 1_000_000).astype(int)
     safe_emit("futKbars", {"kbars": daily.to_dict("records")})
     print(f"📤 futKbars ({len(daily)}) bars")
