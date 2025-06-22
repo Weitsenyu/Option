@@ -1,71 +1,87 @@
-import os, re, io, time, bisect, glob, threading, warnings, sys
+import os, re, time, bisect, threading, warnings, sys, io
 from datetime import datetime, date, timedelta
 from collections import defaultdict
-from io import BytesIO
 
 import pandas as pd
-import requests, socketio, shioaji as sj
-from shioaji.constant  import QuoteType, QuoteVersion
-from shioaji           import Exchange, TickFOPv1, BidAskFOPv1
+import requests
+import socketio
+import shioaji as sj
+from shioaji.constant import QuoteType, QuoteVersion
+from shioaji import Exchange, TickFOPv1, BidAskFOPv1
 
-# === 0. 基本參數 =============================================
-BASE_DIR      = os.path.dirname(__file__)
-SAVE_DIR      = os.getenv("SAVE_DIR", "/tmp/taifex_data")
-TIMEVAL_XLSX  = os.path.join(BASE_DIR, "時間價值.xlsx")   # ← Excel 現在就在 backend 目錄
-SOCKET_HUB    = os.getenv("SOCKET_HUB", "http://localhost:3001")  # Render 預設 3001
-API_KEY       = os.getenv("SJ_KEY")
-API_SECRET    = os.getenv("SJ_SEC")
-URL_DAY       = "https://www.taifex.com.tw/cht/3/optDailyMarketReport"
-URL_NIGHT     = URL_DAY + "?marketCode=1"
-HEADERS       = {"User-Agent": "Mozilla/5.0"}
+# === 0. 使用者參數 & 環境檢查 ==============================
+BASE_DIR    = os.path.dirname(__file__)                 # 新增
+TIMEVAL_XLSX= os.path.join(BASE_DIR, "時間價值.xlsx")    # 新增
+
+SOCKET_HUB = os.getenv("SOCKET_HUB", "http://localhost:3001")
+API_KEY    = os.getenv("SJ_KEY")
+API_SECRET = os.getenv("SJ_SEC")
+URL_DAY    = "https://www.taifex.com.tw/cht/3/optDailyMarketExcel"
+URL_NIGHT  = URL_DAY + "?marketCode=1"
+HEADERS    = {"User-Agent": "Mozilla/5.0"}
 
 if not (API_KEY and API_SECRET):
     print("❗ 尚未設定 Shioaji KEY/SECRET，請先 POST /set-sj-key")
     sys.exit(0)
 
-os.makedirs(SAVE_DIR, exist_ok=True)
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-# === 1. 4 週平均曲線 =========================================
+# === 1. 4 週平均曲線載入 ===================================
 def load_avg_series(path: str) -> dict:
     """
-    Excel  預期：前 2 欄 => [剩餘分鐘, 平均值]  
-    如果混入文字 (例如『三 15:02』) 會自動忽略。
+    Excel 預期：第 1 欄＝剩餘交易分鐘、第 2 欄＝平均值
+    轉成 Highcharts 期待的 [x,y]。
     """
     try:
-        df = pd.read_excel(path, engine="openpyxl").iloc[:, :2]
-        df = df.apply(pd.to_numeric, errors="coerce").dropna()
-        pts = df.values.tolist()
-        print(f"✅ 讀到時間價值 {len(pts)} 個點")
-        return {"name": "過去四週平均", "data": [[int(x), float(y)] for x, y in pts]}
+        df = pd.read_excel(path, engine="openpyxl")
+        pts = df.iloc[:, :2].dropna().values.tolist()
+        pts = [[int(x), float(y)] for x, y in pts if pd.notna(x) and pd.notna(y)]
+        print(f"✅ 讀到時間價值 {len(pts)} 點")
+        return {"name": "過去四週平均", "data": pts}
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
 
-# === 2. Taifex 日 / 夜盤 HTML 抓取 ===========================
-def _best_encoding(resp):
-    ct = resp.headers.get("content-type","").lower()
+avg_series = load_avg_series(TIMEVAL_XLSX)      # 立即載入
+
+# === 2. HTML 解析小工具 ===================================
+def _best_encoding(res):
+    ct = res.headers.get("content-type", "").lower()
     return "utf-8" if "utf-8" in ct else "big5"
 
-def fetch_table(url:str, is_night:bool) -> pd.DataFrame:
+def fetch_table(url: str, is_night: bool):
     """
-    直接抓臺交所網頁（HTML），回傳最後一張含『履約價』欄位的 DataFrame
+    向臺交所下載日盤或夜盤 HTML，回傳含「履約價」欄位的 DataFrame。
     """
     r = requests.get(url, headers=HEADERS, timeout=30)
     r.encoding = _best_encoding(r)
-    html = r.text.replace("&nbsp;", " ")
+    text = r.text.replace("&nbsp;", " ")
 
-    # 讀所有表格 → 取含「履約價」者
-    dfs = pd.read_html(io.StringIO(html), header=0, flavor="lxml")
-    df  = next(tbl for tbl in dfs if any("履約價" in c for c in tbl.columns))
+    # 擷取交易日
+    if not is_night:
+        m = re.search(r"日期：\s*([\d/]+)", text)
+    else:
+        m = re.search(r"(\d{4}/\d{2}/\d{2})\s*\d{2}:\d{2}\s*[~～]\s*次日", text)
+    if not m:
+        raise RuntimeError("無法從網頁擷取到交易日")
+    date_str = m.group(1)
 
+    # 讀所有表，挑出有「履約價」的那一張
+    dfs = pd.read_html(io.StringIO(text), header=0, flavor="lxml")
+    df  = next(tbl for tbl in dfs if "履約價" in tbl.columns)
+
+    # 清理
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-    if str(df.iloc[-1, 0]).strip() in ("合計", "總計"):
+    if df.iloc[-1, 0] in ("合計", "總計"):
         df = df.iloc[:-1]
     df.replace({"-": pd.NA, "－": pd.NA}, inplace=True)
-    return df
 
-# === 3. 欄位小工具 ===========================================
+    # 補上日/夜盤與交易日欄
+    df["市場時段"] = "夜盤" if is_night else "日盤"
+    df["交易日"]   = pd.to_datetime(date_str, format="%Y/%m/%d")
+    return df, date_str
+
+# === 3. 資料結構轉換小工具 ================================
 CLEAN_COL = re.compile(r"[\s＊*()（）]").sub
 norm      = lambda s: CLEAN_COL("", str(s))
 NUM       = re.compile(r"[^0-9+\-.]").sub
@@ -74,6 +90,9 @@ to_float  = lambda x: float(NUM("", str(x)))      if pd.notna(x) and str(x).stri
 strike    = lambda code: int(code[3:8]) if len(code)>=9 and code[3:8].isdigit() else None
 
 def pick(df, *keys, raise_err=True):
+    if keys and isinstance(keys[-1], bool):
+        raise_err, keys = keys[-1], keys[:-1]
+    keys = tuple(str(k) for k in keys)
     for c in df.columns:
         if all(k in norm(c) for k in keys):
             return c
@@ -81,91 +100,81 @@ def pick(df, *keys, raise_err=True):
         raise KeyError("/".join(keys))
     return None
 
-def pick_any(df, *cands):
-    for k in cands:
-        col = pick(df, k, raise_err=False)
-        if col: return col
-    raise KeyError("/".join(cands))
-
-def _nth_wed(y,m,n):
-    cnt,d=0,1
-    while True:
-        if date(y,m,d).weekday()==2:
-            cnt+=1
-            if cnt==n: return date(y,m,d)
-        d+=1
-
-def expiry_to_date(exp:str):
-    """
-    '202506W4' → '2025/06/25' (第 4 個 Wed)  
-    '202506'    → 例行月合約 (第 3 Wed)
-    """
+def expiry_to_date(exp: str):
     y, m = int(exp[:4]), int(exp[4:6])
     n    = int(exp[-1]) if "W" in exp else 3
-    return _nth_wed(y,m,n).strftime("%Y/%m/%d")
+    cnt, d = 0, 1
+    while True:
+        if date(y, m, d).weekday() == 2:
+            cnt += 1
+            if cnt == n:
+                return date(y, m, d).strftime("%Y/%m/%d")
+        d += 1
 
-# === 4. 轉 chainRows ========================================
-def parse_chain(df, is_day:bool):
-    mcol = pick_any(df, "到期月份", "契約月份")
-    kcol = pick_any(df, "履約價")
-    ccol = pick_any(df, "買賣權")
+def parse_chain(df, is_day: bool):
+    mcol = pick(df, "到期月份")
+    kcol = pick(df, "履約價")
+    ccol = pick(df, "買賣權")
+    vol_c = pick(df, "合計成交量", False) if is_day else pick(df, "成交量", False)
+    net_c = pick(df, "MktPos", False) or pick(df, "NetMktPos", False) or pick(df, "rev.NetMktPos", False)
+    vol_c = vol_c or pick(df, "成交量")
+    bid_c = pick(df, "最後最佳買價")
+    ask_c = pick(df, "最後最佳賣價")
+    last_c= pick(df, "最後", "成交價")
+    chg_c = pick(df, "漲跌%")
+    oi_c  = pick(df, "未沖銷")
 
-    vol_c = pick(df, "合計成交量", raise_err=False) if is_day else None
-    vol_c = vol_c or pick_any(df, "成交量")
-    net_c = pick(df,"MktPos",False) or pick(df,"NetMktPos",False)
-    bid_c = pick_any(df, "最後最佳買價","買價")
-    ask_c = pick_any(df, "最後最佳賣價","賣價")
-    last_c= pick(df,"最後","成交價")
-    chg_c = pick(df,"漲跌%", False)
-    oi_c  = pick_any(df, "未沖銷","未平倉")
-
-    rows=[]
-    for _,r in df.iterrows():
-        if pd.isna(r[kcol]) or r[ccol] not in ("Call","Put"): continue
+    rows = []
+    for _, r in df.iterrows():
+        if pd.isna(r[kcol]) or r[ccol] not in ("Call", "Put"):
+            continue
         try:
             exp_real = expiry_to_date(str(r[mcol]).strip())
-        except:  # 週選多半是中文日期，直接放入
+        except:
             exp_real = str(r[mcol]).strip()
         rows.append({
-            "expiration":exp_real,
-            "strike":float(r[kcol]),
-            "cp": "C" if r[ccol]=="Call" else "P",
-            "volume":to_int(r[vol_c]),
-            "bid":to_float(r[bid_c]),
-            "ask":to_float(r[ask_c]),
-            "last":to_float(r[last_c]),
-            "chg":to_float(r[chg_c]),
-            "oi":to_int(r[oi_c]),
-            "netPos":to_int(r[net_c]) if net_c else 0
+            "expiration": exp_real,
+            "strike": float(r[kcol]),
+            "cp": "C" if r[ccol] == "Call" else "P",
+            "volume": to_int(r[vol_c]),
+            "bid": to_float(r[bid_c]),
+            "ask": to_float(r[ask_c]),
+            "last": to_float(r[last_c]),
+            "chg": to_float(r[chg_c]),
+            "oi": to_int(r[oi_c]),
+            "netPos": to_int(r[net_c]) if net_c else 0
         })
     return rows
 
-def merge(day,nite):
-    key = lambda r:(r["expiration"],r["strike"],r["cp"])
-    d={}
-    for r in day+nite:
-        d.setdefault(key(r),{}).update({k:v for k,v in r.items() if v not in (None,0)})
+def merge(day, nite):
+    key = lambda r: (r["expiration"], r["strike"], r["cp"])
+    d = {}
+    for r in day + nite:
+        d.setdefault(key(r), {}).update({k:v for k,v in r.items() if v not in (None,0)})
     return list(d.values())
 
-# === 5. 下載＋組 snapshot ====================================
-avg_series = load_avg_series(TIMEVAL_XLSX)
+# === 4. 立即抓取第一次快照 ================================
+df_day, _   = fetch_table(URL_DAY,   False)
+df_nig, _   = fetch_table(URL_NIGHT, True)
+day_rows    = parse_chain(df_day, True)
+nite_rows   = parse_chain(df_nig, False)
+chain_rows  = merge(day_rows, nite_rows)
 
-day_rows   = parse_chain(fetch_table(URL_DAY,   False), True)
-nite_rows  = parse_chain(fetch_table(URL_NIGHT, True ), False)
-chain_rows = merge(day_rows, nite_rows)
-
-# === 6. Socket.IO 推第一包 ==================================
+# === 5. Socket.IO 連線 & 首波推送 ==========================
 sio = socketio.Client(logger=False)
 sio.connect(SOCKET_HUB)
-sio.emit("dailySnap", {"chainRows":chain_rows}, namespace="/")
-sio.emit("otmSeries", {"average":avg_series},    namespace="/")
+
+sio.emit("dailySnap", {"chainRows": chain_rows}, namespace="/")
+sio.emit("otmSeries", {"average": avg_series},    namespace="/")   # 新增推送
 print(f"📤 dailySnap (日:{len(day_rows)} 夜:{len(nite_rows)})")
 
-def safe_emit(evt,data):
-    if sio.connected: sio.emit(evt,data,namespace="/")
-    else: threading.Timer(0.3,lambda:safe_emit(evt,data)).start()
+def safe_emit(evt, data):
+    if sio.connected:
+        sio.emit(evt, data)
+    else:
+        threading.Timer(0.3, lambda: safe_emit(evt, data)).start()
 
-# === 7. Shioaji 連線 ===========
+# === 6. Shioaji 登入 & 推送期貨 Kbars ======================
 api = sj.Shioaji()
 api.login(API_KEY, API_SECRET, contracts_timeout=10000)
 print("✅ Shioaji login / contracts ready")

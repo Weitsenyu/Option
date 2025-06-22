@@ -21,33 +21,36 @@ function KeyInputModal({ open, onSubmit }) {
   if (!open) return null;
 
   return (
-    <div className="modal-backdrop">
+    <div className="login-wrapper">        
       <form
-        className="key-modal"
+        className="login-card"               
         onSubmit={e => {
           e.preventDefault();
           onSubmit({ key, sec });
         }}
       >
-        <h3>輸入 Shioaji API Key</h3>
+        <h1>Shioaji<br />API 登入</h1>      
+        <label>API_KEY</label>           
         <input
           placeholder="API_KEY"
           value={key}
           onChange={e => setKey(e.target.value.trim())}
         />
+        <label>API_SECRET</label>
         <input
           placeholder="API_SECRET"
           value={sec}
           onChange={e => setSec(e.target.value.trim())}
-          style={{ marginTop: 8 }}
+          style={{ marginTop: 4 }}
         />
         <button type="submit" disabled={!key || !sec}>
-          送出
+          連　線
         </button>
       </form>
     </div>
   );
 }
+
 
 /* ========= 時間工具 ========= */
 const fmtSec = seconds => {
