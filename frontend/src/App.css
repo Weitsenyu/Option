@@ -29,7 +29,7 @@ html,body{
   margin:0 0 28px;text-align:center;font-size:1.75rem;
   font-weight:700;line-height:1.3;
   background:linear-gradient(135deg,#00b8ff,#1ad1ff 45%,#78fffd);
-  -webkit-background-clip:text;color:transparent;
+  background-clip:text;color:transparent;
 }
 /* Label 與 Input */
 .login-card label{

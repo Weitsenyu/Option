@@ -6,3 +6,4 @@ python-socketio
 shioaji
 lxml          
 html5lib    
+websocket-client>=1.7

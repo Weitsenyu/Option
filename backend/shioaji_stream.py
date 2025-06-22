@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 import os, re, time, bisect, threading, warnings, sys, io
+from io import BytesIO
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 
@@ -9,9 +11,14 @@ import shioaji as sj
 from shioaji.constant import QuoteType, QuoteVersion
 from shioaji import Exchange, TickFOPv1, BidAskFOPv1
 
-# === 0. 使用者參數 & 環境檢查 ==============================
-BASE_DIR    = os.path.dirname(__file__)                 # 新增
-TIMEVAL_XLSX= os.path.join(BASE_DIR, "時間價值.xlsx")    # 新增
+
+BASE_DIR     = os.path.dirname(__file__)
+
+TIMEVAL_LOC  = os.path.join(BASE_DIR, "時間價值.xlsx")
+TIMEVAL_RAW  = (
+    "https://raw.githubusercontent.com/Weitsenyu/Option/"
+    "main/backend/%E6%99%82%E9%96%93%E5%83%B9%E5%80%BC.xlsx"
+)
 
 SOCKET_HUB = os.getenv("SOCKET_HUB", "http://localhost:3001")
 API_KEY    = os.getenv("SJ_KEY")
@@ -26,23 +33,53 @@ if not (API_KEY and API_SECRET):
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
-# === 1. 4 週平均曲線載入 ===================================
-def load_avg_series(path: str) -> dict:
+# ------------------------------------------------------------------
+# ① 讀取「過去四週平均」曲線
+# ------------------------------------------------------------------
+_NUM = re.compile(r"[^0-9+\-.]").sub           # 只保留 0-9.+-
+def _to_num(s: str, want_int=False):
     """
-    Excel 預期：第 1 欄＝剩餘交易分鐘、第 2 欄＝平均值
-    轉成 Highcharts 期待的 [x,y]。
+    把字串裡的數字抓出來；抓不到就丟 ValueError。
+    例：'三 15:02' → ValueError（因為含非數字、冒號）
+        '1,234'   → 1234
     """
+    s = str(s).strip()
+    if not re.fullmatch(r"[0-9.+\-]+", s):  
+        raise ValueError
+    s = _NUM("", s)
+    return int(float(s)) if want_int else float(s)
+
+def _read_excel(buf: bytes):
+    return pd.read_excel(BytesIO(buf), engine="openpyxl")
+
+def load_avg_series() -> dict:
+
     try:
-        df = pd.read_excel(path, engine="openpyxl")
-        pts = df.iloc[:, :2].dropna().values.tolist()
-        pts = [[int(x), float(y)] for x, y in pts if pd.notna(x) and pd.notna(y)]
+        if os.path.isfile(TIMEVAL_LOC):
+            buf = open(TIMEVAL_LOC, "rb").read()
+        else:
+            buf = requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content
+
+        df  = _read_excel(buf)
+        pts = []
+
+        for x, y in df.iloc[:, :2].dropna().values.tolist():
+            try:
+                mins = _to_num(x, want_int=True)   # 剩餘「交易分鐘」
+                val  = _to_num(y)                  # 平均值
+                pts.append([mins, val])
+            except ValueError:
+                # 任何一邊轉不了數字就跳過該列
+                continue
+
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
+
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
 
-avg_series = load_avg_series(TIMEVAL_XLSX)      # 立即載入
+avg_series = load_avg_series()                
 
 # === 2. HTML 解析小工具 ===================================
 def _best_encoding(res):
@@ -165,7 +202,7 @@ sio = socketio.Client(logger=False)
 sio.connect(SOCKET_HUB)
 
 sio.emit("dailySnap", {"chainRows": chain_rows}, namespace="/")
-sio.emit("otmSeries", {"average": avg_series},    namespace="/")   # 新增推送
+sio.emit("otmSeries", {"average": avg_series}, namespace="/")   # ✅ 新增推送
 print(f"📤 dailySnap (日:{len(day_rows)} 夜:{len(nite_rows)})")
 
 def safe_emit(evt, data):
@@ -205,7 +242,7 @@ def emit_kbars():
 
 emit_kbars()
 
-# === 5. 準備選擇權合約索引 & Expirations/Subsets ==============
+# === 5. 準備選擇權合約索引 & Expirations/Subsets ==========
 options = list(api.Contracts.Options.TXO)
 for sec in ("TX1","TX2","TX4","TX5"):
     if hasattr(api.Contracts.Options, sec):
@@ -225,10 +262,10 @@ def cp_of(code): return "C" if code[8].upper()<="L" else "P"
 def subset(px, exp):
     ks = exp2strikes.get(exp, [])
     if not ks or px is None: return []
-    i = bisect.bisect_right(ks, px)
-    call = ks[i:i+15]; put = ks[max(0,i-25):i]
-    call += ks[i+15:i+15+(15-len(call))]
-    put  = ks[max(0,i-25-(25-len(put))):max(0,i-25)] + put
+    i   = bisect.bisect_right(ks, px)
+    call= ks[i:i+15]; put = ks[max(0,i-25):i]
+    call+= ks[i+15:i+15+(15-len(call))]
+    put = ks[max(0,i-25-(25-len(put))):max(0,i-25)] + put
     return sorted(set(call+put))
 
 def emit_exp_data(px):
