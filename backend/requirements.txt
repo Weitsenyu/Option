@@ -1,5 +1,8 @@
+# backend/requirements.txt  （完整內容）
 pandas
 requests
 openpyxl
 python-socketio
 shioaji
+lxml          
+html5lib    

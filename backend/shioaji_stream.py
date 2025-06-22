@@ -10,7 +10,7 @@ from shioaji.constant import QuoteType, QuoteVersion
 from shioaji import Exchange, TickFOPv1, BidAskFOPv1
 
 # === 0. 使用者參數 =========================================
-SAVE_DIR   = r"D:\new-options-website\test"
+SAVE_DIR   = os.getenv("SAVE_DIR", "/tmp/taifex_data")
 SOCKET_HUB = "http://localhost:3001"
 API_KEY    = os.getenv("SJ_KEY")
 API_SECRET = os.getenv("SJ_SEC")
@@ -60,11 +60,11 @@ def expiry_to_date(exp):
 
 def _read(buf: bytes):
     try:
-        df = pd.read_excel(BytesIO(buf), sheet_name=0)
+        df = pd.read_excel(BytesIO(buf), sheet_name=0, engine="openpyxl")  
         if df.columns[0].isdigit():
-            raise ValueError
+            raise ValueError            
     except Exception:
-        df = pd.read_html(BytesIO(buf))[0]
+        df = pd.read_html(BytesIO(buf), flavor="lxml")[0]
     df.columns = df.columns.map(str)
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
     if str(df.iloc[-1, 0]).strip() in ("合計", "總計"):
