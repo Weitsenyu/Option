@@ -44,11 +44,6 @@ def _read_excel(buf: bytes) -> pd.DataFrame:
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
-    """
-    讀取 Excel『右側最新四周平均』欄，產生
-        {"name":"過去四週平均","data":[[剩餘分鐘,價值],…]}
-    X 軸＝(總列數-索引-1)*2  → 隨時間單調遞減，解決鋸齒。
-    """
     try:
         buf = (
             open(TIMEVAL_LOC, "rb").read()
@@ -67,15 +62,15 @@ def load_avg_series() -> dict:
         if not vals:
             raise RuntimeError("no numeric value")
 
-        n = len(vals)
-        pts = [[(n - i - 1) * 2, vals[i]] for i in range(n)]
+        # 修正成連續遞增的 X 軸 (每2分鐘一筆資料)
+        pts = [[i * 2, vals[i]] for i in range(len(vals))]
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
 
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-
+    
 avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
