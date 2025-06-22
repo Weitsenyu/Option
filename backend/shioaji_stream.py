@@ -10,6 +10,7 @@ import shioaji as sj
 from shioaji.constant import QuoteType, QuoteVersion
 from shioaji import Exchange, TickFOPv1, BidAskFOPv1
 
+
 # ───────────────────────────── 基本參數 ─────────────────────────────
 BASE_DIR    = os.path.dirname(__file__)
 TIMEVAL_LOC = os.path.join(BASE_DIR, "時間價值.xlsx")
@@ -32,24 +33,21 @@ if not (API_KEY and API_SECRET):
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
 # ────────────────── ① 讀「過去四週平均」曲線 ──────────────────
-_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub          # 保留 0-9, +, -, .
-def _to_num(s):
-    cleaned = _ONLY_NUM("", str(s))
-    if cleaned == "":
+_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub          # 只留 0-9 / + / - / .
+def _to_num(s: str) -> float:
+    n = _ONLY_NUM("", str(s))
+    if not n:
         raise ValueError
-    return float(cleaned)
+    return float(n)
 
-def _read_excel(buf: bytes):
+def _read_excel(buf: bytes) -> pd.DataFrame:
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
     """
-    回傳：
-        {"name": "過去四週平均", "data": [[剩餘分鐘, 時間價值], ...]}
-    Excel 結構：
-        col-0  = 星期＋時間（文字）
-        col-1  = 202506W1 … （本週即時）
-        col-2  = 右側最新四周平均　← 我們要的
+    讀取 Excel『右側最新四周平均』欄，產生
+        {"name":"過去四週平均","data":[[剩餘分鐘,價值],…]}
+    X 軸＝(總列數-索引-1)*2  → 隨時間單調遞減，解決鋸齒。
     """
     try:
         buf = (
@@ -59,62 +57,50 @@ def load_avg_series() -> dict:
         )
         df = _read_excel(buf)
 
-        # 找到「右側最新四週平均」那欄；找不到就退而用第 2 欄
-        val_col = next(
-            (c for c in df.columns if "四週平均" in str(c)),
-            df.columns[1]  # 保底
-        )
-
-        # 只取這一欄、過濾空值並轉成 float
-        values = []
+        val_col = next((c for c in df.columns if "四週平均" in str(c)), df.columns[1])
+        vals = []
         for v in df[val_col].dropna():
             try:
-                values.append(_to_num(v))
+                vals.append(_to_num(v))
             except ValueError:
                 continue
+        if not vals:
+            raise RuntimeError("no numeric value")
 
-        if not values:
-            raise RuntimeError("找不到任何數值")
-
-        # 依「列序號」回推剩餘交易分鐘：每列 2 分鐘
-        n_rows = len(values)
-        pts = [[(n_rows - i - 1) * 2, values[i]] for i in range(n_rows)]
-
+        n = len(vals)
+        pts = [[(n - i - 1) * 2, vals[i]] for i in range(n)]
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
 
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-    
-avg_series = load_avg_series()             
+
+avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
 def _best_encoding(res):
-    ct = res.headers.get("content-type", "").lower()
+    ct = res.headers.get("content-type","").lower()
     return "utf-8" if "utf-8" in ct else "big5"
 
 def fetch_table(url: str, is_night: bool):
     r = requests.get(url, headers=HEADERS, timeout=30)
     r.encoding = _best_encoding(r)
-    text = r.text.replace("&nbsp;", " ")
+    html = r.text.replace("&nbsp;", " ")
 
-    # 擷取交易日
-    if not is_night:
-        m = re.search(r"日期：\s*([\d/]+)", text)
-    else:
-        m = re.search(r"(\d{4}/\d{2}/\d{2})\s*\d{2}:\d{2}\s*[~～]\s*次日", text)
+    m = (re.search(r"日期：\s*([\d/]+)", html) if not is_night else
+         re.search(r"(\d{4}/\d{2}/\d{2})\s*\d{2}:\d{2}\s*[~～]\s*次日", html))
     if not m:
-        raise RuntimeError("無法從網頁擷取到交易日")
+        raise RuntimeError("date not found")
     date_str = m.group(1)
 
-    dfs = pd.read_html(io.StringIO(text), header=0, flavor="lxml")
+    dfs = pd.read_html(io.StringIO(html), header=0, flavor="lxml")
     df  = next(tbl for tbl in dfs if "履約價" in tbl.columns)
 
     df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
-    if df.iloc[-1, 0] in ("合計", "總計"):
+    if df.iloc[-1,0] in ("合計","總計"):
         df = df.iloc[:-1]
-    df.replace({"-": pd.NA, "－": pd.NA}, inplace=True)
+    df.replace({"-":pd.NA,"－":pd.NA}, inplace=True)
 
     df["市場時段"] = "夜盤" if is_night else "日盤"
     df["交易日"]   = pd.to_datetime(date_str, format="%Y/%m/%d")
