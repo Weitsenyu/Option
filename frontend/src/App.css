@@ -1,0 +1,110 @@
+/* ===== Global =========================================== */
+html,body{
+  margin:0;padding:0;width:100%;height:100%;
+  font-family:"Poppins","Noto Sans TC",sans-serif;
+  background:#0e1018;color:#eee;overflow:hidden;
+}
+
+/* ===== Layout =========================================== */
+.page-container{display:flex;height:100vh;width:100%;flex-direction:row;}
+
+/* ---------- Top Bar ---------- */
+.top-bar{
+  position:fixed;top:0;left:0;right:0;height:38px;
+  background:#1b1d27;border-bottom:1px solid #333;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;z-index:999;
+}
+.page-title{font-size:1.05em;font-weight:600;color:#eee;}
+.sim-btn-top{
+  background:#0090ff;border:none;border-radius:6px;color:#fff;
+  padding:5px 12px;font-size:.83em;cursor:pointer;
+  box-shadow:0 0 6px rgba(0,144,255,.6);
+}
+.sim-btn-top:hover{filter:brightness(1.15);}
+
+/* ===== 三大 Panel ======================================= */
+
+.left-panel,.right-panel{
+  flex:1 1 0;display:flex;flex-direction:column;
+  padding:46px 12px 12px;          /* 38(top-bar)+8 */
+  background:rgba(24,25,35,.45);backdrop-filter:blur(14px);
+  overflow:hidden;min-width:340px;
+}
+.center-panel{
+  flex:0 0 220px;max-width:220px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:46px 8px 8px;
+  background:rgba(30,32,45,.65);backdrop-filter:blur(20px);
+}
+
+/* Scroll */
+.left-scroll{flex:1;overflow-y:auto;min-height:0;}
+.left-scroll::-webkit-scrollbar,.right-panel::-webkit-scrollbar{display:none;}
+.left-scroll{scrollbar-width:none;}
+
+/* ===== Futures K Chart ================================== */
+.fut-chart-wrap{height:340px;margin-bottom:20px;border-radius:4px;overflow:hidden;}
+.highcharts-background{fill:#0e1018;}
+
+/* ===== Section 標題 & 分區 ============================== */
+.panel-title{
+  font-size:1em;font-weight:600;margin:0 0 6px;
+}
+.chart-section{margin-top:22px;}
+.chart-header{display:flex;align-items:center;margin-bottom:6px;}
+.dropdown-label{margin-right:6px;font-size:.8em;color:#aaa;}
+
+/* ===== Buttons ========================================== */
+.sim-btn{
+  padding:4px 10px;background:#00b8ff;color:#000;font-weight:600;
+  border:none;border-radius:4px;cursor:pointer;
+  box-shadow:0 0 6px rgba(0,184,255,.6);transition:transform .15s;
+}
+.sim-btn:hover{transform:translateY(-1px);}
+
+/* ===== InfoCard & Simple Block ========================== */
+.info-card{
+  margin:12px 0;padding:6px 4px;width:100%;text-align:center;
+  cursor:pointer;border-radius:2px;transition:background .15s;
+}
+.info-card:hover{background:rgba(0,176,255,.08);}
+.info-title{
+  font-size:.76em;color:#8d8d9d;margin-bottom:2px;letter-spacing:.5px;
+}
+.price-main{font-size:1.75em;font-weight:700;color:#1ad1ff;}
+.price-detail{font-size:.75em;margin-top:2px;opacity:0;transition:.2s}
+.info-card:hover .price-detail{opacity:1}
+
+.simple-block{text-align:center;margin:12px 0;}
+.simple-block .price-main.simple{
+  font-size:1.35em;color:#1ad1ff;word-break:keep-all;
+}
+
+/* ===== Modal (策略模擬器) =============================== */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:flex;justify-content:center;align-items:center;z-index:1000;
+}
+.modal-body{
+  background:#1d1d27;padding:16px 20px;border-radius:8px;
+  width:780px;max-height:90vh;overflow:auto;
+  box-shadow:0 0 12px rgba(0,0,0,.8);
+  animation:zoomIn .25s ease;color:#eee;
+}
+@keyframes zoomIn{from{transform:scale(.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+
+.leg-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-bottom:8px;}
+.leg-table th,.leg-table td{border:1px solid #444;padding:4px;text-align:center;}
+.leg-table select,.leg-table input{
+  width:90%;background:#2c2c3a;color:#fff;border:1px solid #555;
+  border-radius:4px;padding:2px 4px;font-size:.8rem;
+}
+.add-leg{
+  margin:4px 0 10px;padding:4px 12px;background:#00b8ff;color:#000;
+  font-weight:600;border:none;border-radius:4px;cursor:pointer;
+}
+.modal-footer{text-align:right;margin-top:4px;}
+.modal-footer button{
+  padding:4px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;
+}

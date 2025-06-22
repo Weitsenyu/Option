@@ -1,0 +1,14 @@
+.ob-table      { width:100%; border-collapse:collapse; font-size:.8rem; }
+.ob-table th,
+.ob-table td   { border:1px solid #444; padding:2px 4px; text-align:center; }
+.price         { width:54px; }
+.vol           { width:52px; position:relative; }
+.buy::before, .sell::before {
+  content:""; position:absolute; left:0; top:0; bottom:0; opacity:.4;
+  background:linear-gradient(to right, #0f0, #070);
+  width:100%; transform-origin:left;
+}
+.sell::before  { background:linear-gradient(to right, #f0f,#a0a); }
+/* 隱藏自身 scrollbar（內層五檔表仍可獨立捲動） */
+.option-chain-container::-webkit-scrollbar{display:none;}
+.option-chain-container{scrollbar-width:none;}

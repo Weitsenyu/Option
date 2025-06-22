@@ -1,0 +1,25 @@
+# －－－ 通用 －－－
+.env
+*.log
+__pycache__/
+.DS_Store
+Thumbs.db
+
+# －－－ Node －－－
+node_modules/
+
+# －－－ Python －－－
+*.pyc
+*.pyo
+.venv/
+env/
+venv/
+
+# －－－ Build 產物 －－－
+/frontend/build/
+/tmp/
+
+# －－－ Excel / 測試檔 －－－
+/test/*.xlsx
+/backend/*.xlsx
+/時間價值.xlsx
