@@ -62,8 +62,8 @@ def load_avg_series() -> dict:
         if not vals:
             raise RuntimeError("no numeric value")
 
-        # 修正成連續遞增的 X 軸 (每2分鐘一筆資料)
-        pts = [[i * 2, vals[i]] for i in range(len(vals))]
+        total_minutes = (len(vals) - 1) * 2
+        pts = [[total_minutes - i * 2, vals[i]] for i in range(len(vals))]
         print(f"✅ 讀到時間價值 {len(pts)} 點")
         return {"name": "過去四週平均", "data": pts}
 
