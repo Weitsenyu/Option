@@ -24,10 +24,9 @@ html,body{
 .sim-btn-top:hover{filter:brightness(1.15);}
 
 /* ===== 三大 Panel ======================================= */
-
 .left-panel,.right-panel{
   flex:1 1 0;display:flex;flex-direction:column;
-  padding:46px 12px 12px;          /* 38(top-bar)+8 */
+  padding:46px 12px 12px;
   background:rgba(24,25,35,.45);backdrop-filter:blur(14px);
   overflow:hidden;min-width:340px;
 }
@@ -48,9 +47,7 @@ html,body{
 .highcharts-background{fill:#0e1018;}
 
 /* ===== Section 標題 & 分區 ============================== */
-.panel-title{
-  font-size:1em;font-weight:600;margin:0 0 6px;
-}
+.panel-title{font-size:1em;font-weight:600;margin:0 0 6px;}
 .chart-section{margin-top:22px;}
 .chart-header{display:flex;align-items:center;margin-bottom:6px;}
 .dropdown-label{margin-right:6px;font-size:.8em;color:#aaa;}
@@ -69,17 +66,13 @@ html,body{
   cursor:pointer;border-radius:2px;transition:background .15s;
 }
 .info-card:hover{background:rgba(0,176,255,.08);}
-.info-title{
-  font-size:.76em;color:#8d8d9d;margin-bottom:2px;letter-spacing:.5px;
-}
+.info-title{font-size:.76em;color:#8d8d9d;margin-bottom:2px;letter-spacing:.5px;}
 .price-main{font-size:1.75em;font-weight:700;color:#1ad1ff;}
 .price-detail{font-size:.75em;margin-top:2px;opacity:0;transition:.2s}
 .info-card:hover .price-detail{opacity:1}
 
 .simple-block{text-align:center;margin:12px 0;}
-.simple-block .price-main.simple{
-  font-size:1.35em;color:#1ad1ff;word-break:keep-all;
-}
+.simple-block .price-main.simple{font-size:1.35em;color:#1ad1ff;word-break:keep-all;}
 
 /* ===== Modal (策略模擬器) =============================== */
 .modal-backdrop{
@@ -100,11 +93,13 @@ html,body{
   width:90%;background:#2c2c3a;color:#fff;border:1px solid #555;
   border-radius:4px;padding:2px 4px;font-size:.8rem;
 }
-.add-leg{
-  margin:4px 0 10px;padding:4px 12px;background:#00b8ff;color:#000;
-  font-weight:600;border:none;border-radius:4px;cursor:pointer;
-}
+.add-leg{margin:4px 0 10px;padding:4px 12px;background:#00b8ff;color:#000;font-weight:600;border:none;border-radius:4px;cursor:pointer;}
 .modal-footer{text-align:right;margin-top:4px;}
-.modal-footer button{
-  padding:4px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;
-}
+.modal-footer button{padding:4px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;}
+
+/* ===== Key-Input Modal ================================== */
+.key-modal{background:#1e1e27;padding:24px 32px;border-radius:12px;display:flex;flex-direction:column;width:320px;}
+.key-modal h3{margin-top:0;margin-bottom:12px;font-size:1.05em;text-align:center;}
+.key-modal input{padding:6px 10px;border-radius:6px;border:1px solid #555;background:#000;color:#fff;width:100%;}
+.key-modal button{margin-top:16px;padding:8px;border:none;background:#00b0ff;color:#fff;border-radius:6px;cursor:pointer;}
+.key-modal button:disabled{opacity:.4;cursor:not-allowed;}

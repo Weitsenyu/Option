@@ -1,19 +1,22 @@
+/* ---------------------------------------------------------
+   server.js  (rev-final)
+--------------------------------------------------------- */
 const express = require("express");
-const fs       = require("fs");
-const path     = require("path");
-const { spawn }= require("child_process");
+const fs      = require("fs");
+const path    = require("path");
+const { spawn } = require("child_process");
 
-const app      = express();
-const PORT     = process.env.PORT || 3001;
+const app  = express();
+const PORT = process.env.PORT || 3001;
+const R    = p => path.join(__dirname, p);   // resolve helper
 
-/* ========== 讓前端 build 檔可被直接下載 ========== */
-app.use(express.static(path.join(__dirname, "../frontend/build")));
+/* --------- 靜態檔 + SPA fallback --------- */
+app.use(express.static(R("../frontend/build")));
 app.get("*", (req, res) => {
-  // 除了 API 以外的 GET 都回前端 index.html
-  res.sendFile(path.join(__dirname, "../frontend/build/index.html"));
+  res.sendFile(R("../frontend/build/index.html"));
 });
 
-/* ---------- 收 Shioaji Key ---------- */
+/* --------- 接收 SJ Key --------- */
 app.use(express.json());
 
 app.post("/set-sj-key", (req, res) => {
@@ -24,45 +27,44 @@ app.post("/set-sj-key", (req, res) => {
   res.sendStatus(200);
 });
 
-/* ---------- 健康檢查 ---------- */
+/* 是否已啟動 python？ */
+app.get("/sj-ready", (_, res) => res.sendStatus(pyProc ? 200 : 503));
+
+/* 健康檢查 */
 app.get("/healthz", (_, res) => res.send("ok"));
 
-/* ---------- Socket.IO 依你原本程式碼繼續 ---------- */
+/* --------- Socket.IO（空殼，照你原邏輯補 emit） --------- */
 const http = require("http").createServer(app);
 const io   = require("socket.io")(http, { cors: { origin: "*" } });
-// TODO: 這裡塞你 broadcast 的 on / emit 事件 …
+// 這裡把你原本 broadcast 的事件綁上去即可…
 
-/* ---------- 啟動 / 重啟 Python ---------- */
+/* --------- 啟動 / 重啟 Python --------- */
 let pyProc = null;
 function startPython() {
-  if (pyProc) return;                    // 已在跑就不重複
-  const env = { ...process.env };
+  if (pyProc) return;                     // 已在跑就不重複
 
-  // 把 /tmp/.env 內容灌進環境變數
+  const env = { ...process.env };
   if (fs.existsSync("/tmp/.env")) {
     fs.readFileSync("/tmp/.env", "utf-8")
       .split("\n")
       .filter(Boolean)
-      .forEach(line => {
-        const [k, v] = line.split("=");
+      .forEach(l => {
+        const [k, v] = l.split("=");
         env[k] = v;
       });
   }
 
-  /* ！！這一行路徑要修成「相對於 node-server 的上一層」！！ */
-  pyProc = spawn("python", ["../backend/shioaji_stream.py"], {
-    env,
-    stdio: "inherit",
-  });
+  const PY = R("../backend/shioaji_stream.py");
+  pyProc = spawn("python", [PY], { env, stdio: "inherit" });
 
   pyProc.on("exit", code => {
     console.log(`python exit ${code}`);
-    pyProc = null;               // 讓下一次 /set-sj-key 可以再啟
+    pyProc = null;                        // 允許下次重新啟動
   });
 }
 
-/* ---------- 伺服器啟動 ---------- */
+/* --------- 伺服器啟動 --------- */
 http.listen(PORT, () => {
   console.log(`Node server on ${PORT}`);
-  startPython();   // 嘗試啟動（若沒 key 會自己退出）
+  startPython();                          // 若沒 key 會立即退出
 });
