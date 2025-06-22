@@ -44,8 +44,14 @@ def _read_excel(buf: bytes) -> pd.DataFrame:
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
+    """
+    讀取 Excel『四週平均』欄，轉成：
+        x ─ 直到檔案最舊那筆為止的「累計剩餘交易分鐘」(0, 2, 4, …)
+        y ─ 該行對應的 OTM 時間價值
+    這樣跨日時不會重新歸零，就不會再出現鋸齒。
+    """
     try:
-        # 讀 excel（本機 or GitHub RAW）
+        # 1. 讀檔（本機優先，否則抓 GitHub RAW）
         buf = (
             open(TIMEVAL_LOC, "rb").read()
             if os.path.isfile(TIMEVAL_LOC)
@@ -53,41 +59,24 @@ def load_avg_series() -> dict:
         )
         df = _read_excel(buf)
 
-        # 找到「四週平均」那一欄
+        # 2. 找到「四週平均」那一欄並轉成數字
         val_col = next((c for c in df.columns if "四週平均" in str(c)), df.columns[1])
-        vals = []
-        for v in df[val_col].dropna():
-            try:
-                vals.append(_to_num(v))
-            except ValueError:
-                continue
+        vals = [_to_num(v) for v in df[val_col].dropna()]
+
         if not vals:
             raise RuntimeError("no numeric value")
 
-        STEP_MIN = 2                     # 每列資料 = 2 分鐘
-        total_min_left = 0               # 往後累加「剩餘分鐘」
-        mins_left = []                   # 暫存各筆對應的剩餘分鐘
-        prev = vals[0]
+        # 3. 反轉，讓「最舊 → x=0」；每行間隔 2 分鐘
+        STEP = 2
+        pts = [[i * STEP, v] for i, v in enumerate(reversed(vals))]
 
-        for v in vals:
-            if v > prev:                       # 非嚴謹，但足夠判斷日切點
-                total_min_left += STEP_MIN
-            mins_left.append(total_min_left)
-            total_min_left += STEP_MIN
-            prev = v
-
-        pts = [
-            [mins_left[-1] - m, v]             # mins_left 最大值為 0
-            for m, v in zip(mins_left, vals)
-        ]
-
-        print(f"✅ 讀到時間價值 {len(pts)} 點（曲線已平滑）")
+        print(f"✅ 讀到時間價值 {len(pts)} 點（已平滑）")
         return {"name": "過去四週平均", "data": pts}
 
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-
+    
 avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
@@ -213,6 +202,14 @@ fut = api.Contracts.Futures.TXF.TXFR1
 mxf = api.Contracts.Futures["MX4R1"]
 tse = api.Contracts.Indexs.TSE["001"]
 
+def safe_snapshot_price(contract, retry=5, delay=0.5) -> float | None:
+    for _ in range(retry):
+        snap = api.snapshots([contract])
+        if snap and snap[0].close:            # 成功拿到價
+            return float(snap[0].close)
+        time.sleep(delay)
+    return None
+
 def emit_kbars():
     end   = datetime.now().date()
     start = end - timedelta(days=30)
@@ -284,7 +281,7 @@ def emit_mkt():
         sio.emit("marketInfo", data, namespace="/")
 
 # 初次 Snapshot & expirationData
-cur_px = float(api.snapshots([fut])[0].close)
+cur_px = safe_snapshot_price(fut) or 0.0
 emit_exp_data(cur_px)
 def init_snap():
     snaps=api.snapshots([fut,mxf,tse],timeout=5000)
