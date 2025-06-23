@@ -9,7 +9,9 @@ import socketio
 import shioaji as sj
 from shioaji.constant import QuoteType, QuoteVersion
 from shioaji import Exchange, TickFOPv1, BidAskFOPv1
-
+import logging
+logging.getLogger("shioaji").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 # ───────────────────────────── 基本參數 ─────────────────────────────
 BASE_DIR    = os.path.dirname(__file__)
@@ -31,40 +33,6 @@ if not (API_KEY and API_SECRET):
     sys.exit(0)
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
-
-# ────────────────── ① 讀「過去四週平均」曲線 ──────────────────
-_ONLY_NUM = re.compile(r"[^0-9+\-.]").sub          # 只留 0-9 / + / - / .
-def _to_num(s: str) -> float:
-    n = _ONLY_NUM("", str(s))
-    if not n:
-        raise ValueError
-    return float(n)
-
-def _read_excel(buf: bytes) -> pd.DataFrame:
-    # openpyxl 在 Render 可以正常使用
-    return pd.read_excel(BytesIO(buf), engine="openpyxl")
-
-def load_avg_series() -> dict:
-    try:
-        buf = (open(TIMEVAL_LOC, "rb").read()
-               if os.path.isfile(TIMEVAL_LOC)
-               else requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content)
-        df = _read_excel(buf)
-
-        val_col = next((c for c in df.columns if "四週平均" in str(c)), df.columns[1])
-        vals = [_to_num(v) for v in df[val_col].dropna()]
-        if not vals:
-            raise RuntimeError("no numeric value")
-
-        pts = [[(len(vals) - 1 - i) * 2, v] for i, v in enumerate(vals)]
-
-        print(f"✅ 讀到時間價值 {len(pts)} 筆")
-        return {"name": "過去四週平均", "data": pts}
-
-    except Exception as e:
-        print("⚠️ 無法載入時間價值.xlsx：", e)
-        return {"name": "過去四週平均", "data": []}
-avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
 def _best_encoding(res):
@@ -171,7 +139,6 @@ chain_rows= merge(day_rows, nite_rows)
 sio = socketio.Client(logger=False)
 sio.connect(SOCKET_HUB)
 sio.emit("dailySnap", {"chainRows": chain_rows}, namespace="/")
-sio.emit("otmSeries", {"average": avg_series}, namespace="/")
 print(f"📤 dailySnap (日:{len(day_rows)} 夜:{len(nite_rows)})")
 
 def safe_emit(evt, data):
