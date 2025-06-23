@@ -1,150 +1,285 @@
-html,body{
-  margin:0;padding:0;width:100%;height:100%;
-  font-family:"Poppins","Noto Sans TC",sans-serif;
-  background:#0e1018;color:#eee;overflow:hidden;
+/* ========= 基本設定 ========= */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: "Poppins", "Noto Sans TC", sans-serif;
+  background: #0e1018;
+  color: #eee;
+  overflow: hidden;
 }
 
-/* ===== Login Page ===== */
-.login-wrapper{
-  position:fixed;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  background:#0e1018;
+/* ========= 登入畫面 ========= */
+.login-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0e1018;
+  overflow: hidden;
 }
-.login-card{
-  width:340px;max-width:88vw;padding:38px 46px;border-radius:20px;
-  background:rgba(30,33,48,.55);
-  backdrop-filter:blur(20px) saturate(160%);
-  box-shadow:0 0 30px rgba(0,0,0,.75);
-  animation:bounceIn .6s;
-}
-@keyframes bounceIn{
-  0%{transform:scale(.6);opacity:0}
-  60%{transform:scale(1.05);opacity:1}
-  100%{transform:scale(1)}
-}
-.login-card h1{
-  margin:0 0 28px;text-align:center;font-size:1.75rem;font-weight:700;
-  line-height:1.3;
-  background:linear-gradient(135deg,#00b8ff,#1ad1ff 45%,#78fffd);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-}
-.login-card label{display:block;margin:14px 0 6px;font-size:.82rem;color:#9aa0c8;}
-.login-card input{
-  width:100%;padding:12px 14px;border:1px solid #49506f;border-radius:10px;
-  background:#1a1e2d;color:#eee;font-size:.9rem;transition:.15s;
-}
-.login-card input:focus{
-  outline:none;border-color:#1ad1ff;
-  box-shadow:0 0 0 2px rgba(26,209,255,.35);
-}
-.login-card button{
-  margin-top:26px;width:100%;padding:12px 0;
-  background:linear-gradient(135deg,#1ad1ff 0%,#00b8ff 100%);
-  color:#000;font-weight:700;border:none;border-radius:10px;cursor:pointer;
-  transition:.15s;
-}
-.login-card button:hover{
-  transform:translateY(-3px);
-  box-shadow:0 6px 18px rgba(26,209,255,.55);
-}
-.login-card button:disabled{filter:grayscale(1);cursor:not-allowed;transform:none;box-shadow:none;}
 
-/* ===== Layout ===== */
-.page-container{display:flex;height:100vh;width:100%;}
+.login-card {
+  width: 340px;
+  max-width: 88vw;
+  padding: 38px 46px;
+  border-radius: 20px;
+  background: rgba(30, 33, 48, 0.55);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.75);
+  animation: bounceIn 0.6s;
+}
 
-/* Top-Bar */
-.top-bar{
-  position:fixed;inset-block-start:0;inset-inline:0;height:38px;
-  background:#1b1d27;border-block-end:1px solid #333;
-  display:flex;align-items:center;justify-content:space-between;
-  padding-inline:12px;z-index:999;
+@keyframes bounceIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
 }
-.page-title{font-size:1.05em;font-weight:600;color:#eee;}
-.sim-btn-top{
-  background:#0090ff;border:none;border-radius:6px;color:#fff;
-  padding:5px 12px;font-size:.83em;cursor:pointer;
-  box-shadow:0 0 6px rgba(0,144,255,.6);
-}
-.sim-btn-top:hover{filter:brightness(1.15);}
 
-/* ─── Panels ─────────────────────────────────────────── */
-.left-panel , .right-panel{
-  flex:1 1 0;display:flex;flex-direction:column;
-  padding:46px 12px 12px;               /* 預留 top-bar 高度 */
-  background:rgba(24,25,35,.45);backdrop-filter:blur(14px);
+.login-card h1 {
+  margin: 0 0 28px;
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.3;
+  background: linear-gradient(135deg, #00b8ff, #1ad1ff 45%, #78fffd);
+  background-clip: text;
+  color: transparent;
 }
-/* 中柱縮窄一些，兩側留更多給表格/圖形 */
-.center-panel{
-  flex:0 0 160px;max-width:160px;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:46px 8px 8px;
-  background:rgba(30,32,45,.65);backdrop-filter:blur(20px);
-}
-/* 右側固定寬度，避免被擠壓；同時允許垂直捲動 */
-.right-panel{flex:0 0 420px;max-width:420px;min-width:380px;}
-.right-scroll{flex:1;overflow-y:auto;min-height:0;}
-.right-scroll::-webkit-scrollbar{width:8px;}
-.right-scroll::-webkit-scrollbar-thumb{background:#444;border-radius:4px;}
 
-.left-scroll{flex:1;overflow-y:auto;min-height:0;}
-.left-scroll::-webkit-scrollbar{display:none;}    /* 隱藏左邊捲軸 */
-.left-scroll{scrollbar-width:none;}
+.login-card label { display: block; margin: 14px 0 6px; font-size: 0.82rem; color: #9aa0c8; }
 
-/* ─── Charts / 標題 ────────────────────────── */
-.fut-chart-wrap{height:340px;margin-block-end:20px;border-radius:4px;overflow:hidden;}
-.highcharts-background{fill:#0e1018;}
+.login-card input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #49506f;
+  border-radius: 10px;
+  background: #1a1e2d;
+  color: #eee;
+  font-size: 0.9rem;
+  transition: border 0.15s, box-shadow 0.15s;
+}
 
-.panel-title{font-size:1em;font-weight:600;margin-block-end:6px;}
-.chart-section{margin-block-start:22px;}
-.chart-header{display:flex;align-items:center;margin-block-end:6px;}
-.dropdown-label{margin-inline-end:6px;font-size:.8em;color:#aaa;}
+.login-card input:focus {
+  outline: none;
+  border-color: #1ad1ff;
+  box-shadow: 0 0 0 2px rgba(26, 209, 255, 0.35);
+}
 
-/* ─── Buttons ─────────────────────────────── */
-.sim-btn{
-  padding:4px 10px;background:#00b8ff;color:#000;font-weight:600;
-  border:none;border-radius:4px;cursor:pointer;
-  box-shadow:0 0 6px rgba(0,184,255,.6);transition:.15s;
+.login-card button {
+  margin-top: 26px;
+  width: 100%;
+  padding: 12px 0;
+  background: linear-gradient(135deg, #1ad1ff 0%, #00b8ff 100%);
+  color: #000;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.sim-btn:hover{transform:translateY(-1px);}
 
-/* ─── InfoCard / Simple Block ─────────────── */
-.info-card{
-  margin:12px 0;padding:6px 4px;width:100%;text-align:center;
-  cursor:pointer;border-radius:2px;transition:background .15s;
-}
-.info-card:hover{background:rgba(0,176,255,.08);}
-.info-title{font-size:.76em;color:#8d8d9d;margin-block-end:2px;letter-spacing:.5px;}
-.price-main{font-size:1.75em;font-weight:700;color:#1ad1ff;}
-.price-detail{font-size:.75em;margin-block-start:2px;opacity:0;transition:.2s;}
-.info-card:hover .price-detail{opacity:1;}
+.login-card button:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(26, 209, 255, 0.55); }
+.login-card button:disabled { filter: grayscale(1); cursor: not-allowed; transform: none; box-shadow: none; }
 
-.simple-block{text-align:center;margin:12px 0;}
-.simple-block .price-main.simple{font-size:1.35em;color:#1ad1ff;word-break:keep-all;}
+/* ========= 整體版面 ========= */
+.top-bar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 38px;
+  background: #1b1d27;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  z-index: 999;
+}
 
-/* ─── Modal (策略模擬器) ───────────────────── */
-.modal-backdrop{
-  position:fixed;inset:0;background:rgba(0,0,0,.6);
-  display:flex;justify-content:center;align-items:center;z-index:1000;
-}
-.modal-body{
-  background:#1d1d27;padding:16px 20px;border-radius:8px;
-  width:780px;max-height:90vh;overflow:auto;
-  box-shadow:0 0 12px rgba(0,0,0,.8);
-  animation:zoomIn .25s ease;color:#eee;
-}
-@keyframes zoomIn{from{transform:scale(.8);opacity:0;}to{transform:scale(1);opacity:1;}}
+.page-title { font-size: 1.05em; font-weight: 600; color: #eee; }
 
-.leg-table{width:100%;border-collapse:collapse;font-size:.85rem;margin-block-end:8px;}
-.leg-table th,.leg-table td{border:1px solid #444;padding:4px;text-align:center;}
-.leg-table select,.leg-table input{
-  width:90%;background:#2c2c3a;color:#fff;border:1px solid #555;
-  border-radius:4px;padding:2px 4px;font-size:.8rem;
+.sim-btn-top {
+  background: #0090ff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  padding: 5px 12px;
+  font-size: 0.83em;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 144, 255, 0.6);
 }
-.add-leg{
-  margin:4px 0 10px;padding:4px 12px;background:#00b8ff;color:#000;
-  font-weight:600;border:none;border-radius:4px;cursor:pointer;
+.sim-btn-top:hover { filter: brightness(1.15); }
+
+/* ========= 三大區塊 ========= */
+.page-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: calc(100vh - 38px);   /* 扣掉 top-bar */
+  padding-top: 38px;            /* 避免被 top-bar 蓋住 */
+  box-sizing: border-box;
 }
-.modal-footer{text-align:end;margin-block-start:4px;}
-.modal-footer button{
-  padding:4px 12px;background:#555;color:#fff;border:none;border-radius:4px;cursor:pointer;
+
+.left-panel,
+.right-panel {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px 12px;
+  background: rgba(24, 25, 35, 0.45);
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+  min-width: 380px;             /* 防止過窄 */
 }
+
+.center-panel {
+  flex: 0 0 220px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 8px 8px;
+  background: rgba(30, 32, 45, 0.65);
+  backdrop-filter: blur(20px);
+}
+
+/* ========= 內部可捲動內容 ========= */
+/* 左側原本 className="left-scroll" → 補上規則恢復滾動 */
+.left-scroll,
+.panel-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;      /* Fix flex + overflow */
+}
+
+/* 右側仍可用 .right-scroll + .no-scrollbar 組合 */
+.right-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+
+/* 隱藏捲軸 (保留滾動) */
+.left-scroll::-webkit-scrollbar,
+.right-scroll::-webkit-scrollbar {
+  display: none;
+}
+.left-scroll, .right-scroll { scrollbar-width: none; }
+
+/* ========= 圖表區塊 ========= */
+.fut-chart-wrap {
+  height: 320px;
+  min-height: 300px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.highcharts-background { fill: #0e1018; }
+
+/* ========= 文字區塊 ========= */
+.panel-title { font-size: 1em; font-weight: 600; margin: 0 0 6px; letter-spacing: 0.5px; }
+
+.chart-section { margin-top: 22px; }
+.chart-header  { display: flex; align-items: center; margin-bottom: 6px; }
+.dropdown-label { margin-right: 6px; font-size: 0.8em; color: #aaa; }
+
+/* ========= InfoCard ========= */
+.info-card {
+  margin: 12px 0;
+  padding: 6px 4px;
+  width: 100%;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.info-card:hover { background: rgba(0, 176, 255, 0.08); }
+
+.info-title { font-size: 0.76em; color: #8d8d9d; margin-bottom: 2px; letter-spacing: 0.4px; }
+.price-main  { font-size: 1.75em; font-weight: 700; color: #1ad1ff; }
+.price-detail { font-size: 0.75em; margin-top: 2px; opacity: 0; transition: opacity 0.2s; }
+.info-card:hover .price-detail { opacity: 1; }
+
+/* ========= 簡易數字塊 ========= */
+.simple-block { text-align: center; margin: 12px 0; }
+.price-main.simple { font-size: 1.35em; color: #1ad1ff; word-break: keep-all; }
+
+/* ========= 通用按鈕 ========= */
+.sim-btn {
+  padding: 4px 10px;
+  background: #00b8ff;
+  color: #000;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 184, 255, 0.6);
+  transition: transform 0.15s;
+}
+.sim-btn:hover { transform: translateY(-1px); }
+
+/* ========= 策略模擬器 (Modal) ========= */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-body {
+  background: #1d1d27;
+  padding: 16px 20px;
+  border-radius: 8px;
+  width: 780px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+  animation: zoomIn 0.25s ease;
+  color: #eee;
+}
+
+@keyframes zoomIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.leg-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 8px; }
+.leg-table th, .leg-table td { border: 1px solid #444; padding: 4px; text-align: center; }
+
+.leg-table select, .leg-table input {
+  width: 90%;
+  background: #2c2c3a;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 0.8rem;
+}
+
+.add-leg {
+  margin: 4px 0 10px;
+  padding: 4px 12px;
+  background: #00b8ff;
+  color: #000;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modal-footer { text-align: right; margin-top: 4px; }
+.modal-footer button {
+  padding: 4px 12px;
+  background: #555;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ========= 其餘輔助 ========= */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
