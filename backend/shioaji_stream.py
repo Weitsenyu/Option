@@ -41,42 +41,29 @@ def _to_num(s: str) -> float:
     return float(n)
 
 def _read_excel(buf: bytes) -> pd.DataFrame:
+    # openpyxl 在 Render 可以正常使用
     return pd.read_excel(BytesIO(buf), engine="openpyxl")
 
 def load_avg_series() -> dict:
-    """
-    讀取 Excel『四週平均』欄，轉成：
-        x ─ 直到檔案最舊那筆為止的「累計剩餘交易分鐘」(0, 2, 4, …)
-        y ─ 該行對應的 OTM 時間價值
-    這樣跨日時不會重新歸零，就不會再出現鋸齒。
-    """
     try:
-        # 1. 讀檔（本機優先，否則抓 GitHub RAW）
-        buf = (
-            open(TIMEVAL_LOC, "rb").read()
-            if os.path.isfile(TIMEVAL_LOC)
-            else requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content
-        )
+        buf = (open(TIMEVAL_LOC, "rb").read()
+               if os.path.isfile(TIMEVAL_LOC)
+               else requests.get(TIMEVAL_RAW, headers=HEADERS, timeout=15).content)
         df = _read_excel(buf)
 
-        # 2. 找到「四週平均」那一欄並轉成數字
         val_col = next((c for c in df.columns if "四週平均" in str(c)), df.columns[1])
         vals = [_to_num(v) for v in df[val_col].dropna()]
-
         if not vals:
             raise RuntimeError("no numeric value")
 
-        # 3. 反轉，讓「最舊 → x=0」；每行間隔 2 分鐘
-        STEP = 2
-        pts = [[i * STEP, v] for i, v in enumerate(reversed(vals))]
+        pts = [[(len(vals) - 1 - i) * 2, v] for i, v in enumerate(vals)]
 
-        print(f"✅ 讀到時間價值 {len(pts)} 點（已平滑）")
+        print(f"✅ 讀到時間價值 {len(pts)} 筆")
         return {"name": "過去四週平均", "data": pts}
 
     except Exception as e:
         print("⚠️ 無法載入時間價值.xlsx：", e)
         return {"name": "過去四週平均", "data": []}
-    
 avg_series = load_avg_series()
 
 # === 2. HTML 解析小工具 ===================================
@@ -295,23 +282,33 @@ init_snap()
 
 # === 7. 自動訂閱 & 回呼 ===================================
 subscribed = set()
+
+def build_index(exp):
+    idx = {}
+    for c in options:
+        if code2exp[c.code] == exp:
+            idx.setdefault(strike(c.code), {})[cp_of(c.code)] = c
+    return idx
+
 def ensure_sub():
     global cur_px
-    idx = {strike(c.code):c for c in options if code2exp[c.code]==nearest_exp}
+    idx = build_index(nearest_exp)
     ks  = sorted(idx)
-    if not ks: return
-    i   = bisect.bisect_right(ks, cur_px)
-    targ= set(ks[i:i+15] + ks[max(0,i-25):i])
-    added=False
-    for k in targ:
-        for cp in ("C","P"):
-            c = idx.get((k if cp=="C" else k),None)
+    if not ks:
+        return
+    i = bisect.bisect_right(ks, cur_px)
+    target = set(ks[i:i+15] + ks[max(0, i-25):i])     # 15C / 25P
+    added = False
+    for k in target:
+        for cp in ("C", "P"):
+            c = idx.get(k, {}).get(cp)
             if c and c.code not in subscribed:
-                for qt in (QuoteType.Tick,QuoteType.BidAsk):
+                for qt in (QuoteType.Tick, QuoteType.BidAsk):
                     api.quote.subscribe(c, qt, version=QuoteVersion.v1)
                 subscribed.add(c.code)
-                added=True
-    if added: emit_exp_data(cur_px)
+                added = True
+    if added:
+        emit_exp_data(cur_px)
 
 for c in (fut,mxf,tse):
     for qt in (QuoteType.Tick,QuoteType.BidAsk):
